@@ -445,7 +445,7 @@ header {{
 
 /* ── Hero banner ── */
 .hero {{
-  padding: 36px 24px 28px;
+  padding: 28px 20px 24px;
   text-align: center;
   position: relative;
   overflow: hidden;
@@ -463,22 +463,20 @@ header {{
 }}
 .hero-label {{
   font-family: 'Cinzel', serif;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   letter-spacing: 0.55em;
-  color: rgba(212,175,55,0.8);
-  margin-bottom: 10px;
+  color: rgba(212,175,55,0.75);
+  margin-bottom: 8px;
+  position: relative;
 }}
-.hero-title {{
-  font-family: 'Noto Sans JP', sans-serif;
-  font-size: clamp(1.5rem, 5.5vw, 2.6rem);
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-shadow: 0 2px 12px rgba(0,0,0,0.6);
-  line-height: 1.2;
+.hero-title-img {{
+  display: block;
+  width: min(88%, 640px);
+  height: auto;
+  margin: 0 auto;
+  position: relative;
+  filter: drop-shadow(0 4px 16px rgba(0,0,0,0.5));
 }}
-.ring-hero .hero-title   {{ color: #ffe0e0; }}
-.daily-hero .hero-title  {{ color: #d0fde0; }}
-.toname-hero .hero-title {{ color: #d0e8ff; }}
 
 /* ── Content area ── */
 .content-wrap {{
@@ -658,8 +656,8 @@ header {{
 <!-- ── Ring panel ── -->
 <div class="category-panel ring-panel active" id="ring-panel">
   <div class="hero ring-hero">
-    <div class="hero-label">SEASON RANKING</div>
-    <div class="hero-title">リングゲームポイントランキング</div>
+    <div class="hero-label">S E A S O N &nbsp; R A N K I N G</div>
+    <img src="title_ring.png" class="hero-title-img" alt="リングゲームポイントランキング">
   </div>
   <div class="content-wrap">{ring_html}</div>
 </div>
@@ -667,8 +665,8 @@ header {{
 <!-- ── Daily panel ── -->
 <div class="category-panel daily-panel" id="daily-panel">
   <div class="hero daily-hero">
-    <div class="hero-label">DAILY RANKING</div>
-    <div class="hero-title">デイリーリングポイントランキング</div>
+    <div class="hero-label">D A I L Y &nbsp; R A N K I N G</div>
+    <img src="title_daily.png" class="hero-title-img" alt="デイリーリングポイントランキング">
   </div>
   <div class="content-wrap">{daily_html}</div>
 </div>
@@ -676,8 +674,8 @@ header {{
 <!-- ── Tournament panel ── -->
 <div class="category-panel toname-panel" id="toname-panel">
   <div class="hero toname-hero">
-    <div class="hero-label">MONTHLY TOURNAMENT</div>
-    <div class="hero-title">トナメポイントランキング</div>
+    <div class="hero-label">M O N T H L Y &nbsp; T O U R N A M E N T</div>
+    <img src="title_toname.png" class="hero-title-img" alt="MONTHLY DEEP RANKING">
   </div>
   <div class="content-wrap">{toname_html}</div>
 </div>
