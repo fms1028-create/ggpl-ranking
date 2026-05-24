@@ -475,9 +475,9 @@ header {{
   margin: 0 auto;
   position: relative;
   filter:
-    drop-shadow(0 0 6px rgba(212,175,55,0.8))
-    drop-shadow(0 0 18px rgba(212,175,55,0.45))
-    drop-shadow(0 4px 18px rgba(0,0,0,0.7));
+    drop-shadow(0 0 1px rgba(212,175,55,1.0))
+    drop-shadow(0 0 3px rgba(212,175,55,0.85))
+    drop-shadow(0 3px 8px rgba(0,0,0,0.6));
 }}
 
 /* ── Content area ── */
@@ -583,18 +583,24 @@ header {{
 }}
 
 .pod-name {{
-  font-size: 0.82rem;
+  font-size: 1.0rem;
   font-weight: 900;
   text-align: center;
   color: var(--text);
-  margin: 4px 4px 2px;
+  margin: 6px 4px 3px;
   word-break: break-all;
   line-height: 1.2;
 }}
+.podium-place.first .pod-name {{
+  font-size: 1.15rem;
+}}
 .pod-pts {{
-  font-size: 0.72rem;
+  font-size: 0.88rem;
   font-weight: 700;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+}}
+.podium-place.first .pod-pts {{
+  font-size: 1.0rem;
 }}
 .ring-pts   {{ color: var(--ring-c); }}
 .daily-pts  {{ color: var(--daily-c); }}
