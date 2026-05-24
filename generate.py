@@ -59,23 +59,47 @@ def _rank_label(n):
     return f"{n}{suffix}"
 
 
-# ── Ring season tabs: A=rank(1st-9th then empty), B=name+"様", C=points+"pt" ──
+# ── Ring season tabs ──
+# Layout: (some empty cols) | rank | name+"様" | points+"pt"
+# rank col position varies, so we detect it dynamically.
 
 def get_ring_ranking_from_sheet(ws):
     rows = ws.get_all_values()
     print(f"    {ws.title}: {len(rows)}行読み込み")
+    if rows:
+        print(f"      先頭5行サンプル: {[r[:6] for r in rows[:5]]}")
+
+    # Detect which column contains the rank label (1st/2nd/…)
+    rank_col = None
+    for row in rows[:20]:
+        for ci, cell in enumerate(row):
+            if _detect_rank(str(cell)) is not None:
+                rank_col = ci
+                break
+        if rank_col is not None:
+            break
+
+    if rank_col is None:
+        print(f"    ランク列が見つかりません")
+        return []
+
+    name_col = rank_col + 1
+    pts_col  = rank_col + 2
+    print(f"    rank_col={rank_col}, name_col={name_col}, pts_col={pts_col}")
+
     ranking = []
     auto_rank = 0
 
     for row in rows:
-        if len(row) < 2:
+        if len(row) <= name_col:
             continue
-        a_cell = str(row[0]).strip()
-        name_raw = str(row[1]).strip() if len(row) > 1 else ""
-        pts_raw  = str(row[2]).strip() if len(row) > 2 else ""
 
-        # Skip header or empty name
-        if not name_raw or name_raw in ("名前", "#N/A"):
+        a_cell   = str(row[rank_col]).strip()
+        name_raw = str(row[name_col]).strip()
+        pts_raw  = str(row[pts_col]).strip() if len(row) > pts_col else ""
+
+        # Skip header / alignment / empty rows
+        if not name_raw or name_raw in ("名前", "#N/A") or ":-:" in name_raw:
             auto_rank = 0
             continue
 
@@ -84,12 +108,11 @@ def get_ring_ranking_from_sheet(ws):
         if not name:
             continue
 
-        # Parse points ("4,945pt" → 4945)
+        # Parse points ("4,945pt" or "4945" → int)
         pts_num = re.sub(r"[^\d]", "", pts_raw)
         if not pts_num or int(pts_num) == 0:
             continue
 
-        # Determine rank number
         rank_num = _detect_rank(a_cell)
         if rank_num is not None:
             auto_rank = rank_num
@@ -340,6 +363,9 @@ header {{
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
+  background: #fff;
+  border-radius: 6px;
+  padding: 6px 10px;
 }}
 .logo-img {{
   height: 60px;
