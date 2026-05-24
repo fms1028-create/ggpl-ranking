@@ -21,8 +21,6 @@ SA_JSON_STR = os.environ.get("SERVICE_ACCOUNT_JSON", "")
 
 SEASON_TAB_PATTERN = re.compile(r"^\d{1,2}/\d{1,2}-\d{1,2}/\d{1,2}$")
 MONTH_TAB_PATTERN = re.compile(r"^\d{4}年\d{1,2}月$|^\d{1,2}月$|^\d{4}/\d{1,2}$")
-DAILY_TAB_NAME = "デイリー運用"
-
 
 def get_gc():
     sa_json = SA_JSON_STR.strip()
@@ -142,40 +140,46 @@ def fetch_ring_seasons(gc, sheet_id):
     return seasons
 
 
-# ── Daily ring tab: col C=name, col I=points, col J=date ──
+# ── Daily ring ranking: aggregate col C=name, col I=net points, col J=date
+#    from all season tabs (デイリー運用 is just an ops manual, not data)
 
 def fetch_daily_ranking(gc, sheet_id):
     try:
         sh = gc.open_by_key(sheet_id)
-        ws = sh.worksheet(DAILY_TAB_NAME)
     except Exception as e:
-        print(f"  デイリータブ読み込みエラー: {e}")
+        print(f"  デイリー読み込みエラー: {e}")
         return []
 
-    rows = ws.get_all_values()
     by_date = {}
-    for row in rows:
-        if len(row) < 10:
+    for ws in sh.worksheets():
+        if not SEASON_TAB_PATTERN.match(ws.title):
             continue
-        name = str(row[2]).strip()
-        raw = str(row[8]).strip()
-        date_str = str(row[9]).strip()
-        minus = raw.startswith("-") or raw.startswith("−")
-        points_str = raw.replace(",", "").replace("-", "").replace("−", "").replace("\\-", "")
+        print(f"  デイリー集計: {ws.title}")
+        rows = ws.get_all_values()
+        for row in rows:
+            if len(row) < 10:
+                continue
+            name = str(row[2]).strip()
+            raw = str(row[8]).strip()
+            date_str = str(row[9]).strip()
 
-        if not name or not date_str or not re.match(r"\d{4}/\d{2}/\d{2}", date_str):
-            continue
-        try:
-            points = int(float(points_str))
-        except ValueError:
-            continue
-        if minus:
-            points = -points
-        if points <= 0:
-            continue
+            if not name or not date_str or not re.match(r"\d{4}/\d{2}/\d{2}", date_str):
+                continue
+            minus = raw.startswith("-") or raw.startswith("−")
+            points_str = re.sub(r"[^\d.]", "", raw)
+            if not points_str:
+                continue
+            try:
+                points = int(float(points_str))
+            except ValueError:
+                continue
+            if minus:
+                points = -points
+            if points <= 0:
+                continue
 
-        by_date.setdefault(date_str, {})
-        by_date[date_str][name] = by_date[date_str].get(name, 0) + points
+            by_date.setdefault(date_str, {})
+            by_date[date_str][name] = by_date[date_str].get(name, 0) + points
 
     seasons = []
     for date_str in sorted(by_date.keys(), reverse=True):
