@@ -1,0 +1,39 @@
+name: ランキング更新
+
+on:
+  schedule:
+    - cron: '30 2 * * *'   # 毎日 11:30 JST
+    - cron: '30 4 * * 1-5' # 平日 13:30 JST
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 依存パッケージをインストール
+        run: pip install -r requirements.txt
+
+      - name: HTMLを生成
+        env:
+          RING_SHEET_ID: ${{ secrets.RING_SHEET_ID }}
+          TONAME_SHEET_ID: ${{ secrets.TONAME_SHEET_ID }}
+          SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+        run: python generate.py
+
+      - name: GitHub Pagesにデプロイ
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          publish_branch: gh-pages
+          exclude_assets: '.github,generate.py,requirements.txt'
