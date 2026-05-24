@@ -253,6 +253,8 @@ def _podium_html(ranking, color_key):
     def place_html(player, place, block_cls, block_num):
         h = f'<div class="podium-place {place}">'
         if player:
+            if place == "first":
+                h += '<div class="podium-stars">✦ ✦ ✦</div>'
             h += f'<div class="pod-rank-badge badge-{place}">{block_num}</div>'
             h += f'<div class="pod-name">{player["name"]}</div>'
             h += f'<div class="pod-pts {color_key}-pts">{player["points"]}</div>'
@@ -468,11 +470,14 @@ header {{
 }}
 .hero-title-img {{
   display: block;
-  width: min(88%, 640px);
+  width: min(96%, 820px);
   height: auto;
   margin: 0 auto;
   position: relative;
-  filter: drop-shadow(0 3px 12px rgba(0,0,0,0.6));
+  filter:
+    drop-shadow(0 0 6px rgba(212,175,55,0.8))
+    drop-shadow(0 0 18px rgba(212,175,55,0.45))
+    drop-shadow(0 4px 18px rgba(0,0,0,0.7));
 }}
 
 /* ── Content area ── */
@@ -536,24 +541,46 @@ header {{
   flex: 1;
   max-width: 200px;
 }}
-.podium-place.first  {{ order: 2; }}
+.podium-place.first  {{ order: 2; background: radial-gradient(ellipse at 50% 55%, rgba(212,175,55,0.13) 0%, transparent 70%); border-radius: 12px; padding-top: 6px; }}
 .podium-place.second {{ order: 1; }}
 .podium-place.third  {{ order: 3; }}
 
+.podium-stars {{
+  font-size: 0.6rem;
+  color: #d4af37;
+  letter-spacing: 0.5em;
+  margin-bottom: 5px;
+  opacity: 0.9;
+}}
 .pod-rank-badge {{
-  width: 36px; height: 36px;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-family: 'Cinzel', serif;
-  font-size: 1rem; font-weight: 900;
+  font-weight: 900;
   color: #fff;
-  margin-bottom: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  margin-bottom: 7px;
   letter-spacing: 0;
 }}
-.badge-first  {{ background: linear-gradient(145deg, #f0d060 0%, #b8830a 100%); box-shadow: 0 2px 12px rgba(212,175,55,0.5); }}
-.badge-second {{ background: linear-gradient(145deg, #d0d0d0 0%, #7a7a7a 100%); }}
-.badge-third  {{ background: linear-gradient(145deg, #e09050 0%, #8b4800 100%); }}
+.badge-first {{
+  width: 48px; height: 48px; font-size: 1.3rem;
+  background: linear-gradient(145deg, #ffe066 0%, #d4a017 40%, #8b5e00 100%);
+  box-shadow: 0 0 0 3px rgba(212,175,55,0.35), 0 0 16px rgba(212,175,55,0.7), 0 3px 10px rgba(0,0,0,0.3);
+  animation: gold-pulse 2.5s ease-in-out infinite;
+}}
+.badge-second {{
+  width: 40px; height: 40px; font-size: 1.05rem;
+  background: linear-gradient(145deg, #e8e8e8 0%, #a0a0a0 50%, #606060 100%);
+  box-shadow: 0 0 0 2px rgba(180,180,180,0.3), 0 2px 10px rgba(0,0,0,0.25);
+}}
+.badge-third {{
+  width: 38px; height: 38px; font-size: 1rem;
+  background: linear-gradient(145deg, #f0a858 0%, #c07020 50%, #7a3c00 100%);
+  box-shadow: 0 0 0 2px rgba(200,120,50,0.3), 0 2px 10px rgba(0,0,0,0.25);
+}}
+@keyframes gold-pulse {{
+  0%, 100% {{ box-shadow: 0 0 0 3px rgba(212,175,55,0.35), 0 0 16px rgba(212,175,55,0.7), 0 3px 10px rgba(0,0,0,0.3); }}
+  50%       {{ box-shadow: 0 0 0 5px rgba(212,175,55,0.2),  0 0 32px rgba(212,175,55,1.0), 0 3px 10px rgba(0,0,0,0.3); }}
+}}
 
 .pod-name {{
   font-size: 0.82rem;
@@ -575,11 +602,25 @@ header {{
 
 .pod-block {{
   width: 100%;
-  border-radius: 4px 4px 0 0;
+  border-radius: 6px 6px 0 0;
+  position: relative;
+  overflow: hidden;
 }}
-.block-gold   {{ height: 80px; background: linear-gradient(180deg, #d4af37 0%, #8b6a00 100%); }}
-.block-silver {{ height: 58px; background: linear-gradient(180deg, #a8a8a8 0%, #5a5a5a 100%); }}
-.block-bronze {{ height: 42px; background: linear-gradient(180deg, #cd7f32 0%, #7a3c00 100%); }}
+.pod-block::after {{
+  content: '';
+  position: absolute;
+  top: 0; left: -120%;
+  width: 55%; height: 100%;
+  background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.28) 50%, transparent 80%);
+  animation: block-shine 4s ease-in-out infinite;
+}}
+.block-gold   {{ height: 90px; background: linear-gradient(180deg, #f0d060 0%, #c9950a 40%, #7a5000 100%); }}
+.block-silver {{ height: 64px; background: linear-gradient(180deg, #d8d8d8 0%, #909090 50%, #505050 100%); }}
+.block-bronze {{ height: 46px; background: linear-gradient(180deg, #e8a060 0%, #b06020 50%, #6a3000 100%); }}
+@keyframes block-shine {{
+  0%    {{ left: -120%; }}
+  40%, 100% {{ left: 160%; }}
+}}
 
 /* ── Rest table (4th+) ── */
 .rest-table {{
