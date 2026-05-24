@@ -134,7 +134,7 @@ header {
 
 /* ── Hero banner ── */
 .hero {
-  padding: 28px 20px 22px;
+  padding: 36px 24px 28px;
   text-align: center;
   position: relative;
   overflow: hidden;
@@ -152,28 +152,31 @@ header {
   content: '♠ ♥ ♦ ♣';
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 5rem; letter-spacing: 1em;
-  color: rgba(255,255,255,0.03);
+  font-size: 6rem; letter-spacing: 1em;
+  color: rgba(255,255,255,0.04);
   pointer-events: none;
 }
 .hero-label {
   font-family: 'Cinzel', serif;
-  font-size: 0.65rem;
-  letter-spacing: 0.5em;
-  color: rgba(212,175,55,0.7);
-  margin-bottom: 6px;
+  font-size: 0.7rem;
+  letter-spacing: 0.55em;
+  color: rgba(212,175,55,0.8);
+  margin-bottom: 10px;
 }
 .hero-title {
   font-family: 'Noto Sans JP', sans-serif;
-  font-size: clamp(1rem, 3.5vw, 1.5rem);
+  font-size: clamp(1.5rem, 5.5vw, 2.6rem);
   font-weight: 900;
   color: #fff;
-  letter-spacing: 0.06em;
-  text-shadow: 0 1px 8px rgba(0,0,0,0.5);
+  letter-spacing: 0.08em;
+  text-shadow:
+    0 2px 12px rgba(0,0,0,0.6),
+    0 0 40px rgba(255,255,255,0.1);
+  line-height: 1.2;
 }
-.ring-hero .hero-title   { color: #ffd0d0; }
-.daily-hero .hero-title  { color: #c8ffd8; }
-.toname-hero .hero-title { color: #c8e0ff; }
+.ring-hero .hero-title   { color: #ffe0e0; }
+.daily-hero .hero-title  { color: #d0fde0; }
+.toname-hero .hero-title { color: #d0e8ff; }
 
 /* ── Content area ── */
 .content-wrap {
@@ -182,23 +185,33 @@ header {
   padding: 24px 16px 48px;
 }
 
-/* ── Season tabs ── */
+/* ── Season tabs (horizontal scroll) ── */
 .season-tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 8px;
   margin-bottom: 20px;
+  padding-bottom: 6px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
+.season-tabs::-webkit-scrollbar { height: 4px; }
+.season-tabs::-webkit-scrollbar-track { background: transparent; }
+.season-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 .season-btn {
-  padding: 5px 14px;
+  flex-shrink: 0;
+  padding: 6px 16px;
   border-radius: 20px;
   border: 1.5px solid var(--border);
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
   background: #fff;
   color: var(--muted);
   transition: all 0.2s;
+  white-space: nowrap;
 }
 .ring-tab-btn.active   { border-color: var(--ring-c);   color: var(--ring-c);   background: #fff5f5; }
 .daily-tab-btn.active  { border-color: var(--daily-c);  color: var(--daily-c);  background: #f0fff5; }
@@ -328,7 +341,7 @@ header {
   </div>
   <div class="header-center">
     <div class="header-title">R A N K I N G</div>
-    <div class="header-sub">最終更新: 2026/05/24 14:55 JST</div>
+    <div class="header-sub">最終更新: 2026/05/24 15:50 JST</div>
   </div>
   <div class="header-updated"></div>
 </header>
