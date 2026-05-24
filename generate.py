@@ -45,49 +45,85 @@ def get_gc():
 
 
 def _detect_rank(cell):
-    """Returns rank number 1-10 or None. Handles 1st/2nd/3rd/4th/1位/1 etc."""
+    """Returns rank number 1-30 or None."""
     r = cell.strip().replace(" ", "")
-    for i in range(1, 11):
+    for i in range(1, 31):
         suffix = "st" if i == 1 else "nd" if i == 2 else "rd" if i == 3 else "th"
         if r in (f"{i}{suffix}", f"{i}位", str(i)):
             return i
     return None
 
 
-def get_ranking_from_sheet(ws):
+def _rank_label(n):
+    suffix = "st" if n == 1 else "nd" if n == 2 else "rd" if n == 3 else "th"
+    return f"{n}{suffix}"
+
+
+# ── Ring season tabs: A=rank(1st-9th then empty), B=name+"様", C=points+"pt" ──
+
+def get_ring_ranking_from_sheet(ws):
     rows = ws.get_all_values()
     print(f"    {ws.title}: {len(rows)}行読み込み")
     ranking = []
+    auto_rank = 0
+
     for row in rows:
         if len(row) < 2:
             continue
-        rank_num = _detect_rank(str(row[0]))
-        if rank_num is None:
+        a_cell = str(row[0]).strip()
+        name_raw = str(row[1]).strip() if len(row) > 1 else ""
+        pts_raw  = str(row[2]).strip() if len(row) > 2 else ""
+
+        # Skip header or empty name
+        if not name_raw or name_raw in ("名前", "#N/A"):
+            auto_rank = 0
             continue
 
-        # シートレイアウト: A=順位, B=ポイント, C=名前
-        # (以前 B=名前, C=ポイントと逆に読んでいたため修正)
-        points = str(row[1]).strip() if len(row) > 1 else ""
-        name   = str(row[2]).strip() if len(row) > 2 else ""
-
-        # B列が数字でなくC列が数字なら逆レイアウト (フォールバック)
-        pts_b = re.sub(r"[^\d]", "", points)
-        pts_c = re.sub(r"[^\d]", "", name)
-        if not pts_b and pts_c:
-            name, points = points, name
-            pts_b = pts_c
-
-        if not name or name in ("#N/A", ""):
-            continue
-        if not pts_b or int(pts_b) == 0:
+        # Strip "様" suffix
+        name = re.sub(r"様$", "", name_raw).strip()
+        if not name:
             continue
 
-        suffix = "st" if rank_num == 1 else "nd" if rank_num == 2 else "rd" if rank_num == 3 else "th"
-        ranking.append({"rank": f"{rank_num}{suffix}", "name": name, "points": points})
+        # Parse points ("4,945pt" → 4945)
+        pts_num = re.sub(r"[^\d]", "", pts_raw)
+        if not pts_num or int(pts_num) == 0:
+            continue
 
-    print(f"    → {len(ranking)}件のランキングデータ")
+        # Determine rank number
+        rank_num = _detect_rank(a_cell)
+        if rank_num is not None:
+            auto_rank = rank_num
+        else:
+            auto_rank += 1
+            rank_num = auto_rank
+
+        ranking.append({
+            "rank": _rank_label(rank_num),
+            "name": name,
+            "points": f"{int(pts_num):,}pt",
+        })
+
+    print(f"    → {len(ranking)}件")
     return ranking
 
+
+def fetch_ring_seasons(gc, sheet_id):
+    try:
+        sh = gc.open_by_key(sheet_id)
+    except Exception as e:
+        print(f"  リングシート読み込みエラー: {e}")
+        return []
+
+    seasons = []
+    for ws in sh.worksheets():
+        if SEASON_TAB_PATTERN.match(ws.title):
+            print(f"  タブ読み込み中: {ws.title}")
+            ranking = get_ring_ranking_from_sheet(ws)
+            seasons.append({"title": ws.title, "ranking": ranking})
+    return seasons
+
+
+# ── Daily ring tab: col C=name, col I=points, col J=date ──
 
 def fetch_daily_ranking(gc, sheet_id):
     try:
@@ -103,9 +139,10 @@ def fetch_daily_ranking(gc, sheet_id):
         if len(row) < 10:
             continue
         name = str(row[2]).strip()
-        points_str = str(row[8]).strip().replace(",", "").replace("-", "").replace("−", "")
+        raw = str(row[8]).strip()
         date_str = str(row[9]).strip()
-        minus = str(row[8]).strip().startswith("-") or str(row[8]).strip().startswith("−") or str(row[8]).strip().startswith("\\-")
+        minus = raw.startswith("-") or raw.startswith("−")
+        points_str = raw.replace(",", "").replace("-", "").replace("−", "").replace("\\-", "")
 
         if not name or not date_str or not re.match(r"\d{4}/\d{2}/\d{2}", date_str):
             continue
@@ -118,75 +155,99 @@ def fetch_daily_ranking(gc, sheet_id):
         if points <= 0:
             continue
 
-        if date_str not in by_date:
-            by_date[date_str] = {}
+        by_date.setdefault(date_str, {})
         by_date[date_str][name] = by_date[date_str].get(name, 0) + points
 
     seasons = []
     for date_str in sorted(by_date.keys(), reverse=True):
         players = sorted(by_date[date_str].items(), key=lambda x: x[1], reverse=True)
-        ranking = []
-        for i, (name, pts) in enumerate(players):
-            suffix = ["st", "nd", "rd"][i] if i < 3 else "th"
-            ranking.append({"rank": f"{i+1}{suffix}", "name": name, "points": f"{pts:,}pt"})
-        m = int(date_str[5:7])
-        d = int(date_str[8:10])
+        ranking = [
+            {"rank": _rank_label(i + 1), "name": n, "points": f"{p:,}pt"}
+            for i, (n, p) in enumerate(players)
+        ]
+        m, d = int(date_str[5:7]), int(date_str[8:10])
         seasons.append({"title": f"{m}/{d}", "ranking": ranking})
 
-    print(f"  デイリー: {len(seasons)}日分のデータ読み込み完了")
+    print(f"  デイリー: {len(seasons)}日分")
     return seasons
 
 
-def fetch_seasons(gc, sheet_id, tab_pattern):
+# ── Tournament monthly tabs: A=1位/2位, C=name, L(idx11)=獲得skill → sum per player ──
+
+def fetch_toname_seasons(gc, sheet_id):
     try:
         sh = gc.open_by_key(sheet_id)
     except Exception as e:
-        print(f"  シート読み込みエラー: {e}")
+        print(f"  トナメシート読み込みエラー: {e}")
         return []
 
     seasons = []
     for ws in sh.worksheets():
         title = ws.title
-        if tab_pattern.match(title):
-            print(f"  タブ読み込み中: {title}")
-            ranking = get_ranking_from_sheet(ws)
-            seasons.append({"title": title, "ranking": ranking})
+        if not MONTH_TAB_PATTERN.match(title):
+            continue
+
+        print(f"  タブ読み込み中: {title}")
+        rows = ws.get_all_values()
+        player_pts = {}
+
+        for row in rows:
+            if len(row) < 12:
+                continue
+            a_cell = str(row[0]).strip()
+            name   = str(row[2]).strip()
+            skill_raw = str(row[11]).strip().replace(",", "").replace(" ", "")
+
+            if not _detect_rank(a_cell):
+                continue
+            if not name or name in ("名前", "#N/A", ""):
+                continue
+            try:
+                skill = int(float(skill_raw))
+            except (ValueError, TypeError):
+                continue
+            if skill <= 0:
+                continue
+
+            player_pts[name] = player_pts.get(name, 0) + skill
+
+        ranking = [
+            {"rank": _rank_label(i + 1), "name": n, "points": f"{p:,}pt"}
+            for i, (n, p) in enumerate(
+                sorted(player_pts.items(), key=lambda x: x[1], reverse=True)
+            )
+        ]
+        seasons.append({"title": title, "ranking": ranking})
+
     return seasons
 
 
-# ── HTML generation ──────────────────────────────────────────────────────────
+# ── HTML generation ───────────────────────────────────────────────────────────
 
 def _podium_html(ranking, color_key):
-    """Top-3 podium + rest table."""
     if not ranking:
         return '<p class="no-data">データなし</p>'
 
-    def card_suit(i):
-        return ["♠", "♥", "♦"][i] if i < 3 else ""
-
-    top3 = ranking[:3]
-    while len(top3) < 3:
-        top3.append(None)
+    suits = ["♠", "♥", "♦"]
+    top3 = (ranking + [None, None, None])[:3]
     first, second, third = top3[0], top3[1], top3[2]
 
-    def place_html(player, place, suit, block_class, block_num, crown=False):
+    def place_html(player, place, suit, block_cls, block_num, crown=False):
         h = f'<div class="podium-place {place}">'
         if player:
             if crown:
                 h += '<div class="crown-icon">♛</div>'
-            h += f'<div class="podium-suit {color_key}-suit">{suit}</div>'
-            h += f'<div class="podium-name">{player["name"]}</div>'
-            h += f'<div class="podium-pts {color_key}-pts">{player["points"]}</div>'
-        else:
-            h += '<div class="podium-empty"></div>'
-        h += f'<div class="podium-block {block_class} {color_key}-block">{block_num}</div>'
+            h += f'<div class="suit-icon {color_key}-suit">{suit}</div>'
+            h += f'<div class="pod-name">{player["name"]}</div>'
+            h += f'<div class="pod-pts {color_key}-pts">{player["points"]}</div>'
+        h += f'<div class="pod-block {block_cls}"><span>{block_num}</span></div>'
         h += '</div>'
         return h
 
     html = '<div class="podium-wrap">'
-    html += place_html(second, "second", "♥", "block-silver", "2")
-    html += place_html(first,  "first",  "♠", "block-gold",   "1", crown=True)
-    html += place_html(third,  "third",  "♦", "block-bronze",  "3")
+    html += place_html(second, "second", suits[1], "block-silver", "2")
+    html += place_html(first,  "first",  suits[0], "block-gold",   "1", crown=True)
+    html += place_html(third,  "third",  suits[2], "block-bronze",  "3")
     html += '</div>'
 
     rest = ranking[3:]
@@ -236,24 +297,24 @@ def generate_html(ring_seasons, daily_seasons, toname_seasons, updated_at):
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GGP LIVE SHINJUKU - RANKING</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;900&family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
-/* ── Base ── */
+/* ── Variables ── */
 :root {{
-  --gold:      #d4af37;
-  --gold-lt:   #f5d76e;
-  --gold-dk:   #8b6914;
-  --ring-hi:   #e84545;
-  --ring-dk:   #6b0000;
-  --daily-hi:  #52c97a;
-  --daily-dk:  #1a4a2e;
-  --toname-hi: #5b9bd5;
-  --toname-dk: #0d2b5e;
-  --bg:        #07070f;
-  --surface:   #10101c;
-  --border:    rgba(212,175,55,0.25);
-  --text:      #e8e0d0;
+  --gold:      #b8922a;
+  --gold-lt:   #d4af37;
+  --ring-c:    #c0392b;
+  --ring-lt:   #e74c3c;
+  --daily-c:   #1e8449;
+  --daily-lt:  #27ae60;
+  --toname-c:  #1a5276;
+  --toname-lt: #2980b9;
+  --bg:        #f7f4f0;
+  --card:      #ffffff;
+  --border:    #e8e0d4;
+  --text:      #1a1a1a;
   --muted:     #888;
+  --shadow:    0 2px 16px rgba(0,0,0,0.08);
 }}
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 body {{
@@ -261,105 +322,100 @@ body {{
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-  overflow-x: hidden;
 }}
 
 /* ── Header ── */
 header {{
+  background: #0d0d1a;
+  border-bottom: 3px solid var(--gold-lt);
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 80px;
   position: relative;
-  text-align: center;
-  padding: 36px 20px 28px;
-  background: linear-gradient(180deg, #000 0%, #0a0a18 60%, #07070f 100%);
-  border-bottom: 1px solid var(--gold);
-  overflow: hidden;
 }}
-header::before {{
-  content: '';
-  position: absolute; inset: 0;
-  background:
-    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(212,175,55,0.12) 0%, transparent 70%);
-  pointer-events: none;
+.header-logo {{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }}
-.logo-suit-left, .logo-suit-right {{
-  position: absolute;
-  top: 50%; transform: translateY(-50%);
-  font-size: 4rem;
-  opacity: 0.07;
-  color: var(--gold);
-  font-family: serif;
+.logo-img {{
+  height: 52px;
+  width: auto;
+  object-fit: contain;
 }}
-.logo-suit-left {{ left: 24px; }}
-.logo-suit-right {{ right: 24px; }}
-
-.logo-ggp {{
+.logo-fallback {{
   font-family: 'Cinzel', serif;
-  font-size: clamp(1.6rem, 5vw, 2.8rem);
+  font-size: 1.1rem;
   font-weight: 900;
-  letter-spacing: 0.18em;
-  color: var(--gold);
-  text-shadow: 0 0 40px rgba(212,175,55,0.6), 0 2px 4px #000;
-  line-height: 1;
+  color: var(--gold-lt);
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  white-space: nowrap;
 }}
-.logo-live {{
-  font-family: 'Cinzel', serif;
-  font-size: clamp(0.55rem, 1.8vw, 0.85rem);
-  letter-spacing: 0.5em;
-  color: rgba(212,175,55,0.7);
-  margin-top: 4px;
-  text-transform: uppercase;
-}}
-.logo-divider {{
-  width: 120px; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--gold), transparent);
-  margin: 12px auto;
-}}
-.logo-ranking {{
-  font-family: 'Cinzel', serif;
-  font-size: clamp(0.6rem, 2vw, 0.9rem);
+.logo-fallback small {{
+  display: block;
+  font-size: 0.5rem;
   letter-spacing: 0.4em;
-  color: var(--text);
-  opacity: 0.8;
+  color: rgba(212,175,55,0.6);
+  font-weight: 600;
 }}
-.updated {{
-  font-size: 0.7rem;
-  color: var(--muted);
-  margin-top: 10px;
-  letter-spacing: 0.05em;
+.header-center {{
+  flex: 1;
+  text-align: center;
+}}
+.header-title {{
+  font-family: 'Cinzel', serif;
+  font-size: clamp(0.9rem, 2.5vw, 1.4rem);
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.25em;
+}}
+.header-sub {{
+  font-size: 0.6rem;
+  letter-spacing: 0.4em;
+  color: rgba(212,175,55,0.6);
+  margin-top: 3px;
+}}
+.header-updated {{
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.35);
+  text-align: right;
+  white-space: nowrap;
+  flex-shrink: 0;
 }}
 
 /* ── Category nav ── */
 .cat-nav {{
   display: flex;
   justify-content: center;
-  gap: 10px;
-  padding: 24px 16px 0;
-  flex-wrap: wrap;
+  gap: 0;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
 }}
 .cat-btn {{
-  position: relative;
-  padding: 12px 28px;
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 2px;
+  flex: 1;
+  max-width: 200px;
+  padding: 14px 20px;
+  border: none;
+  border-bottom: 3px solid transparent;
   font-family: 'Noto Sans JP', sans-serif;
   font-size: 0.82rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
   cursor: pointer;
-  background: var(--surface);
-  color: var(--muted);
-  transition: all 0.25s;
-  clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
-}}
-.cat-btn::after {{
-  content: '';
-  position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
   background: transparent;
-  transition: background 0.25s;
+  color: var(--muted);
+  transition: all 0.2s;
+  white-space: nowrap;
+  letter-spacing: 0.04em;
 }}
-.cat-btn.ring-cat.active   {{ background: rgba(232,69,69,0.15);  color: var(--ring-hi);   border-color: var(--ring-hi); }}
-.cat-btn.daily-cat.active  {{ background: rgba(82,201,122,0.15); color: var(--daily-hi);  border-color: var(--daily-hi); }}
-.cat-btn.toname-cat.active {{ background: rgba(91,155,213,0.15); color: var(--toname-hi); border-color: var(--toname-hi); }}
-.cat-btn:hover {{ opacity: 0.85; }}
+.cat-btn:hover {{ background: #fafafa; }}
+.cat-btn.ring-cat.active   {{ color: var(--ring-c);   border-color: var(--ring-c); }}
+.cat-btn.daily-cat.active  {{ color: var(--daily-c);  border-color: var(--daily-c); }}
+.cat-btn.toname-cat.active {{ color: var(--toname-c); border-color: var(--toname-c); }}
 
 /* ── Category panels ── */
 .category-panel {{ display: none; }}
@@ -367,89 +423,55 @@ header::before {{
 
 /* ── Hero banner ── */
 .hero {{
-  position: relative;
-  padding: 32px 20px 24px;
+  padding: 28px 20px 22px;
   text-align: center;
+  position: relative;
   overflow: hidden;
 }}
-.ring-hero   {{ background: linear-gradient(160deg, #1a0000 0%, #3d0808 40%, #6b0000 70%, #1a0000 100%); }}
-.daily-hero  {{ background: linear-gradient(160deg, #010f06 0%, #0d3320 40%, #1a5c36 70%, #010f06 100%); }}
-.toname-hero {{ background: linear-gradient(160deg, #00040f 0%, #0a1f4e 40%, #0d2b5e 70%, #00040f 100%); }}
-
-.hero::before {{
-  content: '';
-  position: absolute; inset: 0;
-  background:
-    radial-gradient(ellipse 70% 60% at 50% 50%, rgba(212,175,55,0.08) 0%, transparent 70%);
+.ring-hero {{
+  background: linear-gradient(135deg, #2c0000 0%, #7b1010 50%, #2c0000 100%);
 }}
-.hero-suits {{
+.daily-hero {{
+  background: linear-gradient(135deg, #001a0a 0%, #145a32 50%, #001a0a 100%);
+}}
+.toname-hero {{
+  background: linear-gradient(135deg, #000d1a 0%, #1a3a5c 50%, #000d1a 100%);
+}}
+.hero::before {{
+  content: '♠ ♥ ♦ ♣';
   position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: space-around;
-  font-size: 5rem; opacity: 0.04; color: var(--gold);
-  pointer-events: none; font-family: serif;
-  letter-spacing: 0.5em;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 5rem; letter-spacing: 1em;
+  color: rgba(255,255,255,0.03);
+  pointer-events: none;
 }}
 .hero-label {{
   font-family: 'Cinzel', serif;
-  font-size: clamp(0.55rem, 2vw, 0.75rem);
+  font-size: 0.65rem;
   letter-spacing: 0.5em;
-  color: var(--gold-lt);
-  opacity: 0.8;
+  color: rgba(212,175,55,0.7);
   margin-bottom: 6px;
 }}
 .hero-title {{
-  font-family: 'Cinzel', serif;
-  font-size: clamp(1rem, 3.5vw, 1.6rem);
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: clamp(1rem, 3.5vw, 1.5rem);
   font-weight: 900;
-  letter-spacing: 0.12em;
-  color: var(--gold);
-  text-shadow: 0 0 30px rgba(212,175,55,0.5);
-  margin-bottom: 16px;
-  line-height: 1.3;
-}}
-.prize-row {{
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}}
-.prize-item {{
-  background: rgba(0,0,0,0.4);
-  border: 1px solid rgba(212,175,55,0.3);
-  border-radius: 2px;
-  padding: 5px 14px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--gold-lt);
+  color: #fff;
   letter-spacing: 0.06em;
-  clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+  text-shadow: 0 1px 8px rgba(0,0,0,0.5);
 }}
-.badge-row {{
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-}}
-.badge {{
-  display: inline-block;
-  background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05));
-  border: 1px solid rgba(212,175,55,0.5);
-  border-radius: 20px;
-  padding: 4px 14px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--gold-lt);
-  letter-spacing: 0.05em;
+.ring-hero .hero-title   {{ color: #ffd0d0; }}
+.daily-hero .hero-title  {{ color: #c8ffd8; }}
+.toname-hero .hero-title {{ color: #c8e0ff; }}
+
+/* ── Content area ── */
+.content-wrap {{
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
 }}
 
 /* ── Season tabs ── */
-.season-wrap {{
-  max-width: 680px;
-  margin: 0 auto;
-  padding: 20px 16px 48px;
-}}
 .season-tabs {{
   display: flex;
   flex-wrap: wrap;
@@ -457,20 +479,19 @@ header::before {{
   margin-bottom: 20px;
 }}
 .season-btn {{
-  padding: 5px 13px;
+  padding: 5px 14px;
   border-radius: 20px;
-  border: 1px solid #333;
+  border: 1.5px solid var(--border);
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
-  background: #111;
+  background: #fff;
   color: var(--muted);
   transition: all 0.2s;
-  letter-spacing: 0.04em;
 }}
-.ring-tab-btn.active   {{ border-color: var(--ring-hi);   color: var(--ring-hi);   background: rgba(232,69,69,0.1); }}
-.daily-tab-btn.active  {{ border-color: var(--daily-hi);  color: var(--daily-hi);  background: rgba(82,201,122,0.1); }}
-.toname-tab-btn.active {{ border-color: var(--toname-hi); color: var(--toname-hi); background: rgba(91,155,213,0.1); }}
+.ring-tab-btn.active   {{ border-color: var(--ring-c);   color: var(--ring-c);   background: #fff5f5; }}
+.daily-tab-btn.active  {{ border-color: var(--daily-c);  color: var(--daily-c);  background: #f0fff5; }}
+.toname-tab-btn.active {{ border-color: var(--toname-c); color: var(--toname-c); background: #f0f5ff; }}
 
 .season-panel {{ display: none; }}
 .season-panel.active {{ display: block; }}
@@ -481,116 +502,109 @@ header::before {{
   align-items: flex-end;
   justify-content: center;
   gap: 8px;
-  margin: 0 0 24px;
+  margin: 4px 0 20px;
 }}
 .podium-place {{
   display: flex;
   flex-direction: column;
   align-items: center;
   flex: 1;
-  max-width: 180px;
+  max-width: 200px;
 }}
 .podium-place.first  {{ order: 2; }}
 .podium-place.second {{ order: 1; }}
 .podium-place.third  {{ order: 3; }}
 
 .crown-icon {{
-  font-size: 1.3rem;
+  font-size: 1.2rem;
+  color: #c9a227;
   margin-bottom: 2px;
-  color: var(--gold);
-  text-shadow: 0 0 12px var(--gold);
   font-family: serif;
 }}
-.podium-suit {{
-  font-size: 1.8rem;
+.suit-icon {{
+  font-size: 1.6rem;
   font-family: serif;
   line-height: 1;
   margin-bottom: 4px;
 }}
-.ring-suit   {{ color: #e84545; text-shadow: 0 0 12px rgba(232,69,69,0.6); }}
-.daily-suit  {{ color: #52c97a; text-shadow: 0 0 12px rgba(82,201,122,0.6); }}
-.toname-suit {{ color: #5b9bd5; text-shadow: 0 0 12px rgba(91,155,213,0.6); }}
+.ring-suit   {{ color: var(--ring-c); }}
+.daily-suit  {{ color: var(--daily-c); }}
+.toname-suit {{ color: var(--toname-c); }}
 
-.podium-name {{
+.pod-name {{
   font-size: 0.82rem;
   font-weight: 900;
   text-align: center;
-  margin: 4px 4px 2px;
   color: var(--text);
-  line-height: 1.2;
+  margin: 4px 4px 2px;
   word-break: break-all;
+  line-height: 1.2;
 }}
-.podium-pts {{
+.pod-pts {{
   font-size: 0.72rem;
   font-weight: 700;
   margin-bottom: 8px;
-  letter-spacing: 0.04em;
 }}
-.ring-pts   {{ color: var(--ring-hi); }}
-.daily-pts  {{ color: var(--daily-hi); }}
-.toname-pts {{ color: var(--toname-hi); }}
+.ring-pts   {{ color: var(--ring-c); }}
+.daily-pts  {{ color: var(--daily-c); }}
+.toname-pts {{ color: var(--toname-c); }}
 
-.podium-empty {{ flex: 1; }}
-
-.podium-block {{
+.pod-block {{
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Cinzel', serif;
-  font-size: 1.4rem;
-  font-weight: 900;
-  border-radius: 3px 3px 0 0;
-  border-top: 2px solid transparent;
+  border-radius: 4px 4px 0 0;
 }}
-.block-gold   {{ height: 80px; background: linear-gradient(180deg, #c9a227 0%, #7a5700 100%); border-color: var(--gold-lt); }}
-.block-silver {{ height: 58px; background: linear-gradient(180deg, #9a9a9a 0%, #555 100%); border-color: #bbb; }}
-.block-bronze {{ height: 42px; background: linear-gradient(180deg, #b87333 0%, #6b3a1f 100%); border-color: #cd7f32; }}
-
-/* color-specific block glow */
-.ring-block   {{ box-shadow: inset 0 1px 0 rgba(255,255,255,0.2); }}
-.daily-block  {{ box-shadow: inset 0 1px 0 rgba(255,255,255,0.2); }}
-.toname-block {{ box-shadow: inset 0 1px 0 rgba(255,255,255,0.2); }}
+.pod-block span {{
+  font-family: 'Cinzel', serif;
+  font-weight: 900;
+  font-size: 1.4rem;
+  color: #fff;
+}}
+.block-gold   {{ height: 80px; background: linear-gradient(180deg, #d4af37 0%, #8b6a00 100%); }}
+.block-silver {{ height: 58px; background: linear-gradient(180deg, #a8a8a8 0%, #5a5a5a 100%); }}
+.block-bronze {{ height: 42px; background: linear-gradient(180deg, #cd7f32 0%, #7a3c00 100%); }}
 
 /* ── Rest table (4th+) ── */
 .rest-table {{
   width: 100%;
   border-collapse: collapse;
   margin-top: 4px;
-  font-size: 0.88rem;
+  background: var(--card);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
 }}
 .rest-table tr {{
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid #f0ebe4;
   transition: background 0.15s;
 }}
-.rest-table tr:hover {{ background: rgba(255,255,255,0.03); }}
+.rest-table tr:last-child {{ border-bottom: none; }}
+.rest-table tr:hover {{ background: #faf7f4; }}
 .rest-rank {{
-  padding: 10px 8px;
+  padding: 11px 12px;
   width: 52px;
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
 }}
-.rest-name {{
-  padding: 10px 8px;
-  font-weight: 700;
-}}
-.rest-pts {{
-  padding: 10px 8px;
+.rest-name {{ padding: 11px 8px; font-weight: 700; }}
+.rest-pts  {{
+  padding: 11px 14px;
   text-align: right;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
   color: var(--gold);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }}
 
 .no-data {{ color: var(--muted); font-size: 0.88rem; padding: 24px 0; text-align: center; }}
 
-@media (max-width: 420px) {{
-  .hero-title {{ font-size: 0.95rem; }}
-  .podium-block {{ font-size: 1rem; }}
-  .podium-name {{ font-size: 0.75rem; }}
+@media (max-width: 480px) {{
+  header {{ min-height: 64px; gap: 10px; padding: 0 12px; }}
+  .logo-fallback {{ font-size: 0.9rem; }}
+  .pod-block span {{ font-size: 1.1rem; }}
 }}
 </style>
 </head>
@@ -598,38 +612,34 @@ header::before {{
 
 <!-- ── Header ── -->
 <header>
-  <div class="logo-suit-left">♠♥</div>
-  <div class="logo-suit-right">♦♣</div>
-  <div class="logo-ggp">GGP LIVE SHINJUKU</div>
-  <div class="logo-live">GRAND POKER LOUNGE</div>
-  <div class="logo-divider"></div>
-  <div class="logo-ranking">R A N K I N G</div>
-  <p class="updated">最終更新: {updated_at}</p>
+  <div class="header-logo">
+    <!-- ロゴ画像を追加する場合: <img src="logo.png" class="logo-img" alt="GGP LIVE SHINJUKU"> -->
+    <div class="logo-fallback">
+      GGP LIVE<br>SHINJUKU
+      <small>G R A N D &nbsp; P O K E R &nbsp; L O U N G E</small>
+    </div>
+  </div>
+  <div class="header-center">
+    <div class="header-title">R A N K I N G</div>
+    <div class="header-sub">最終更新: {updated_at}</div>
+  </div>
+  <div class="header-updated"></div>
 </header>
 
 <!-- ── Category nav ── -->
-<div class="cat-nav">
+<nav class="cat-nav">
   <button class="cat-btn ring-cat active"   onclick="switchCat(this,'ring-panel')">♠ リングポイント</button>
   <button class="cat-btn daily-cat"         onclick="switchCat(this,'daily-panel')">♥ デイリーリング</button>
   <button class="cat-btn toname-cat"        onclick="switchCat(this,'toname-panel')">♦ トナメポイント</button>
-</div>
+</nav>
 
 <!-- ── Ring panel ── -->
 <div class="category-panel ring-panel active" id="ring-panel">
   <div class="hero ring-hero">
-    <div class="hero-suits">♠ ♥ ♦ ♣</div>
     <div class="hero-label">SEASON RANKING</div>
     <div class="hero-title">リングゲームポイントランキング</div>
-    <div class="prize-row">
-      <span class="prize-item">🥇 1位 &nbsp;30,000コイン</span>
-      <span class="prize-item">🥈 2位 &nbsp;15,000コイン</span>
-      <span class="prize-item">🥉 3位 &nbsp;10,000コイン</span>
-    </div>
-    <div class="badge-row">
-      <span class="badge">☔ 雨の日ポイント 2倍</span>
-    </div>
   </div>
-  <div class="season-wrap">
+  <div class="content-wrap">
     {ring_html}
   </div>
 </div>
@@ -637,15 +647,10 @@ header::before {{
 <!-- ── Daily panel ── -->
 <div class="category-panel daily-panel" id="daily-panel">
   <div class="hero daily-hero">
-    <div class="hero-suits">♠ ♥ ♦ ♣</div>
     <div class="hero-label">DAILY RANKING</div>
     <div class="hero-title">デイリーリングポイントランキング</div>
-    <div class="prize-row">
-      <span class="prize-item">🥇 1位 &nbsp;5,000コイン</span>
-      <span class="prize-item">🥈 2位 &nbsp;3,000コイン</span>
-    </div>
   </div>
-  <div class="season-wrap">
+  <div class="content-wrap">
     {daily_html}
   </div>
 </div>
@@ -653,16 +658,10 @@ header::before {{
 <!-- ── Tournament panel ── -->
 <div class="category-panel toname-panel" id="toname-panel">
   <div class="hero toname-hero">
-    <div class="hero-suits">♠ ♥ ♦ ♣</div>
     <div class="hero-label">MONTHLY TOURNAMENT</div>
     <div class="hero-title">トナメポイントランキング</div>
-    <div class="prize-row">
-      <span class="prize-item">🥇 1位 &nbsp;30,000コイン</span>
-      <span class="prize-item">🥈 2位 &nbsp;15,000コイン</span>
-      <span class="prize-item">🥉 3位 &nbsp;10,000コイン</span>
-    </div>
   </div>
-  <div class="season-wrap">
+  <div class="content-wrap">
     {toname_html}
   </div>
 </div>
@@ -676,7 +675,7 @@ function switchCat(btn, id) {{
   if (el) el.classList.add('active');
 }}
 function switchSeason(btn, id) {{
-  var wrap = btn.closest('.season-wrap');
+  var wrap = btn.closest('.content-wrap');
   wrap.querySelectorAll('.season-btn').forEach(b => b.classList.remove('active'));
   wrap.querySelectorAll('.season-panel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
@@ -697,13 +696,13 @@ def main():
     updated_at = datetime.now(JST).strftime("%Y/%m/%d %H:%M JST")
 
     print("リングポイントランキング読み込み中...")
-    ring_seasons = fetch_seasons(gc, RING_SHEET_ID, SEASON_TAB_PATTERN) if RING_SHEET_ID else []
+    ring_seasons = fetch_ring_seasons(gc, RING_SHEET_ID) if RING_SHEET_ID else []
 
     print("デイリーリングランキング読み込み中...")
     daily_seasons = fetch_daily_ranking(gc, RING_SHEET_ID) if RING_SHEET_ID else []
 
     print("トナメポイントランキング読み込み中...")
-    toname_seasons = fetch_seasons(gc, TONAME_SHEET_ID, MONTH_TAB_PATTERN) if TONAME_SHEET_ID else []
+    toname_seasons = fetch_toname_seasons(gc, TONAME_SHEET_ID) if TONAME_SHEET_ID else []
 
     print("HTML生成中...")
     html = generate_html(ring_seasons, daily_seasons, toname_seasons, updated_at)
