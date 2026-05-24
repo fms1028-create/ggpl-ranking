@@ -254,8 +254,12 @@ def _podium_html(ranking, color_key):
     top3 = (ranking + [None, None, None])[:3]
     first, second, third = top3[0], top3[1], top3[2]
 
+    def esc(s):
+        return s.replace("&", "&amp;").replace('"', "&quot;")
+
     def place_html(player, place, block_cls, block_num):
-        h = f'<div class="podium-place {place}">'
+        name_attr = f' data-name="{esc(player["name"])}"' if player else ""
+        h = f'<div class="podium-place {place}"{name_attr}>'
         if player:
             if place == "first":
                 h += '<div class="podium-stars">✦ ✦ ✦</div>'
@@ -276,7 +280,7 @@ def _podium_html(ranking, color_key):
     if rest:
         html += '<table class="rest-table"><tbody>'
         for r in rest:
-            html += (f'<tr>'
+            html += (f'<tr data-name="{esc(r["name"])}">'
                      f'<td class="rest-rank">{r["rank"]}</td>'
                      f'<td class="rest-name">{r["name"]}</td>'
                      f'<td class="rest-pts">{r["points"]}</td>'
@@ -752,6 +756,25 @@ header {{
 .s-arrow  {{ color: #ccc; font-size: 1.1rem; flex-shrink: 0; margin-left: 4px; }}
 .search-result-item {{ cursor: pointer; }}
 
+/* ── Player flash highlight ── */
+@keyframes flash-player {{
+  0%   {{ box-shadow: none; background: transparent; }}
+  12%  {{ box-shadow: 0 0 0 3px rgba(212,175,55,0.9), 0 0 24px rgba(212,175,55,0.5); background: rgba(212,175,55,0.18); }}
+  24%  {{ box-shadow: none; background: transparent; }}
+  36%  {{ box-shadow: 0 0 0 3px rgba(212,175,55,0.9), 0 0 24px rgba(212,175,55,0.5); background: rgba(212,175,55,0.18); }}
+  48%  {{ box-shadow: none; background: transparent; }}
+  60%  {{ box-shadow: 0 0 0 3px rgba(212,175,55,0.7), 0 0 16px rgba(212,175,55,0.35); background: rgba(212,175,55,0.12); }}
+  76%  {{ box-shadow: none; background: transparent; }}
+  88%  {{ box-shadow: 0 0 0 2px rgba(212,175,55,0.4), 0 0 8px rgba(212,175,55,0.2); background: rgba(212,175,55,0.06); }}
+  100% {{ box-shadow: none; background: transparent; }}
+}}
+.flash-player {{
+  animation: flash-player 2.2s ease-out;
+  border-radius: 8px;
+  position: relative;
+  z-index: 2;
+}}
+
 @media (max-width: 480px) {{
   header {{ min-height: 64px; gap: 10px; padding: 0 12px; }}
   .logo-fallback {{ font-size: 0.9rem; }}
@@ -893,11 +916,24 @@ function goToResult(idx) {{
     var tabs = wrap.querySelectorAll('.season-btn');
     if (tabs[d.tabIdx]) tabs[d.tabIdx].classList.add('active');
   }}
-  // スクロール
+  // 該当選手を中央スクロール＋ちかちかハイライト
   setTimeout(function() {{
-    var hero = catPanel ? catPanel.querySelector('.hero') : null;
-    if (hero) hero.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
-  }}, 80);
+    var panel = document.getElementById(d.panelId);
+    if (!panel) return;
+    var playerEl = null;
+    panel.querySelectorAll('[data-name]').forEach(function(el) {{
+      if (el.getAttribute('data-name') === d.name) playerEl = el;
+    }});
+    if (playerEl) {{
+      playerEl.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+      playerEl.classList.remove('flash-player');
+      void playerEl.offsetWidth;
+      playerEl.classList.add('flash-player');
+      playerEl.addEventListener('animationend', function() {{
+        playerEl.classList.remove('flash-player');
+      }}, {{ once: true }});
+    }}
+  }}, 150);
 }}
 document.getElementById('searchOverlay').addEventListener('click', function(e) {{
   if (e.target === this) closeSearch();
