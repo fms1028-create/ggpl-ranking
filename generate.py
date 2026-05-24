@@ -467,6 +467,7 @@ header {{
   color: rgba(212,175,55,0.75);
   margin-bottom: 8px;
   position: relative;
+  white-space: nowrap;
 }}
 .hero-title-img {{
   display: block;
@@ -666,7 +667,7 @@ header {{
 @media (max-width: 480px) {{
   header {{ min-height: 64px; gap: 10px; padding: 0 12px; }}
   .logo-fallback {{ font-size: 0.9rem; }}
-  .pod-block span {{ font-size: 1.1rem; }}
+  .hero-label {{ font-size: 0.5rem; letter-spacing: 0.18em; }}
 }}
 </style>
 </head>
