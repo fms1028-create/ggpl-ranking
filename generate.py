@@ -315,10 +315,13 @@ def _build_search_js(ring_seasons, daily_seasons, toname_seasons):
         ("toname", "トナメ",   toname_seasons),
     ]
     for cat_key, cat_label, seasons in cats:
-        for s in seasons:
+        for i, s in enumerate(seasons):
             for r in s["ranking"]:
                 entries.append({
                     "cat": cat_key, "catLabel": cat_label,
+                    "catPanel": f"{cat_key}-panel",
+                    "panelId": f"{cat_key}-sp-{i}",
+                    "tabIdx": i,
                     "season": s["title"],
                     "rank": r["rank"], "name": r["name"], "points": r["points"],
                 })
@@ -746,6 +749,8 @@ header {{
 .s-rank   {{ font-size: 0.72rem; font-weight: 700; color: var(--muted); min-width: 28px; flex-shrink: 0; }}
 .s-name   {{ flex: 1; font-weight: 700; font-size: 0.92rem; }}
 .s-pts    {{ font-weight: 700; color: var(--gold); font-size: 0.82rem; white-space: nowrap; }}
+.s-arrow  {{ color: #ccc; font-size: 1.1rem; flex-shrink: 0; margin-left: 4px; }}
+.search-result-item {{ cursor: pointer; }}
 
 @media (max-width: 480px) {{
   header {{ min-height: 64px; gap: 10px; padding: 0 12px; }}
@@ -856,15 +861,43 @@ function doSearch(q) {{
   if (!q) {{ el.innerHTML = '<div class="search-hint">名前を入力して検索</div>'; return; }}
   var matches = SEARCH_DATA.filter(d => d.name.toLowerCase().includes(q));
   if (!matches.length) {{ el.innerHTML = '<div class="search-empty">見つかりませんでした</div>'; return; }}
-  el.innerHTML = matches.map(d =>
-    '<div class="search-result-item">' +
+  el.innerHTML = matches.map((d, i) =>
+    '<div class="search-result-item" onclick="goToResult(' + i + ')" data-idx="' + i + '">' +
     '<span class="s-cat ' + d.cat + '">' + d.catLabel + '</span>' +
     '<span class="s-season">' + d.season + '</span>' +
     '<span class="s-rank">' + d.rank + '</span>' +
     '<span class="s-name">' + d.name + '</span>' +
     '<span class="s-pts">' + d.points + '</span>' +
+    '<span class="s-arrow">›</span>' +
     '</div>'
   ).join('');
+  window._searchMatches = matches;
+}}
+function goToResult(idx) {{
+  var d = window._searchMatches[idx];
+  if (!d) return;
+  closeSearch();
+  // カテゴリ切り替え
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.category-panel').forEach(p => p.classList.remove('active'));
+  var catPanel = document.getElementById(d.catPanel);
+  if (catPanel) catPanel.classList.add('active');
+  document.querySelectorAll('.cat-btn.' + d.cat + '-cat').forEach(b => b.classList.add('active'));
+  // シーズンタブ切り替え
+  var seasonPanel = document.getElementById(d.panelId);
+  if (seasonPanel) {{
+    var wrap = seasonPanel.closest('.content-wrap');
+    wrap.querySelectorAll('.season-btn').forEach(b => b.classList.remove('active'));
+    wrap.querySelectorAll('.season-panel').forEach(p => p.classList.remove('active'));
+    seasonPanel.classList.add('active');
+    var tabs = wrap.querySelectorAll('.season-btn');
+    if (tabs[d.tabIdx]) tabs[d.tabIdx].classList.add('active');
+  }}
+  // スクロール
+  setTimeout(function() {{
+    var hero = catPanel ? catPanel.querySelector('.hero') : null;
+    if (hero) hero.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+  }}, 80);
 }}
 document.getElementById('searchOverlay').addEventListener('click', function(e) {{
   if (e.target === this) closeSearch();
