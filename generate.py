@@ -25,10 +25,11 @@ DAILY_TAB_NAME = "デイリー運用"
 
 
 def get_gc():
+    sa_json = SA_JSON_STR.strip().encode('utf-8').decode('utf-8')
     try:
-        sa_info = json.loads(SA_JSON_STR)
-    except Exception:
-        sa_info = json.loads(base64.b64decode(SA_JSON_STR).decode())
+        sa_info = json.loads(sa_json)
+    except json.JSONDecodeError:
+        sa_info = json.loads(base64.b64decode(sa_json.encode('ascii')).decode('utf-8'))
     scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
     creds = Credentials.from_service_account_info(sa_info, scopes=scopes)
     return gspread.authorize(creds)
