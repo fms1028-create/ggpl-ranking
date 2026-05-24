@@ -475,7 +475,7 @@ header {{
   height: auto;
   margin: 0 auto;
   position: relative;
-  filter: drop-shadow(0 4px 16px rgba(0,0,0,0.5));
+  mix-blend-mode: multiply;
 }}
 
 /* ── Content area ── */
