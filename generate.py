@@ -25,11 +25,21 @@ DAILY_TAB_NAME = "デイリー運用"
 
 
 def get_gc():
-    sa_json = SA_JSON_STR.strip().encode('utf-8').decode('utf-8')
+    sa_json = SA_JSON_STR.strip()
     try:
         sa_info = json.loads(sa_json)
-    except json.JSONDecodeError:
-        sa_info = json.loads(base64.b64decode(sa_json.encode('ascii')).decode('utf-8'))
+    except (json.JSONDecodeError, ValueError):
+        # private_key内の実際の改行を\nエスケープに変換して再試行
+        try:
+            fixed = re.sub(
+                r'("private_key"\s*:\s*")(.*?)(")',
+                lambda m: m.group(1) + m.group(2).replace('\n', '\\n').replace('\r', '') + m.group(3),
+                sa_json,
+                flags=re.DOTALL
+            )
+            sa_info = json.loads(fixed)
+        except (json.JSONDecodeError, ValueError):
+            sa_info = json.loads(base64.b64decode(sa_json.encode()).decode('utf-8'))
     scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
     creds = Credentials.from_service_account_info(sa_info, scopes=scopes)
     return gspread.authorize(creds)
