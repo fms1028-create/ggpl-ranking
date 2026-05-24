@@ -60,74 +60,70 @@ def _rank_label(n):
 
 
 # ── Ring season tabs ──
-# Layout: (some empty cols) | rank | name+"様" | points+"pt"
-# rank col position varies, so we detect it dynamically.
+# Each tab has raw game data AND a ranking summary section.
+# The summary section is identified by a header row with "名前" and "獲得ポイント".
+# We find ALL such headers and return the section with the most entries.
 
 def get_ring_ranking_from_sheet(ws):
     rows = ws.get_all_values()
-    print(f"    {ws.title}: {len(rows)}行読み込み")
-    if rows:
-        print(f"      先頭5行サンプル: {[r[:6] for r in rows[:5]]}")
+    print(f"    {ws.title}: {len(rows)}行")
 
-    # Detect which column contains the rank label (1st/2nd/…)
-    rank_col = None
-    for row in rows[:20]:
-        for ci, cell in enumerate(row):
-            if _detect_rank(str(cell)) is not None:
-                rank_col = ci
-                break
-        if rank_col is not None:
-            break
+    # Find all "名前 | 獲得ポイント" header rows
+    headers = []
+    for i, row in enumerate(rows):
+        cells = [str(c).strip() for c in row]
+        if "名前" in cells and "獲得ポイント" in cells:
+            name_col = cells.index("名前")
+            pts_col  = cells.index("獲得ポイント")
+            rank_col = max(0, name_col - 1)
+            headers.append((i, rank_col, name_col, pts_col))
 
-    if rank_col is None:
-        print(f"    ランク列が見つかりません")
+    if not headers:
+        print(f"    ランキングテーブルが見つかりません")
         return []
 
-    name_col = rank_col + 1
-    pts_col  = rank_col + 2
-    print(f"    rank_col={rank_col}, name_col={name_col}, pts_col={pts_col}")
+    best = []
+    for header_i, rank_col, name_col, pts_col in headers:
+        ranking = []
+        auto_rank = 0
+        for row in rows[header_i + 1:]:
+            cells = [str(c).strip() for c in row]
+            # Stop at next "名前 | 獲得ポイント" header
+            if "名前" in cells and "獲得ポイント" in cells:
+                break
+            if len(row) <= name_col:
+                continue
+            a_cell   = cells[rank_col] if rank_col < len(cells) else ""
+            name_raw = cells[name_col]
+            pts_raw  = cells[pts_col] if pts_col < len(cells) else ""
 
-    ranking = []
-    auto_rank = 0
+            if not name_raw or name_raw in ("名前", "#N/A") or ":-:" in name_raw:
+                continue
+            name = re.sub(r"様$", "", name_raw).strip()
+            if not name:
+                continue
+            pts_num = re.sub(r"[^\d]", "", pts_raw)
+            if not pts_num or int(pts_num) == 0:
+                continue
 
-    for row in rows:
-        if len(row) <= name_col:
-            continue
+            rank_num = _detect_rank(a_cell)
+            if rank_num is not None:
+                auto_rank = rank_num
+            else:
+                auto_rank += 1
+                rank_num = auto_rank
 
-        a_cell   = str(row[rank_col]).strip()
-        name_raw = str(row[name_col]).strip()
-        pts_raw  = str(row[pts_col]).strip() if len(row) > pts_col else ""
+            ranking.append({
+                "rank": _rank_label(rank_num),
+                "name": name,
+                "points": f"{int(pts_num):,}pt",
+            })
 
-        # Skip header / alignment / empty rows
-        if not name_raw or name_raw in ("名前", "#N/A") or ":-:" in name_raw:
-            auto_rank = 0
-            continue
+        if len(ranking) > len(best):
+            best = ranking
 
-        # Strip "様" suffix
-        name = re.sub(r"様$", "", name_raw).strip()
-        if not name:
-            continue
-
-        # Parse points ("4,945pt" or "4945" → int)
-        pts_num = re.sub(r"[^\d]", "", pts_raw)
-        if not pts_num or int(pts_num) == 0:
-            continue
-
-        rank_num = _detect_rank(a_cell)
-        if rank_num is not None:
-            auto_rank = rank_num
-        else:
-            auto_rank += 1
-            rank_num = auto_rank
-
-        ranking.append({
-            "rank": _rank_label(rank_num),
-            "name": name,
-            "points": f"{int(pts_num):,}pt",
-        })
-
-    print(f"    → {len(ranking)}件")
-    return ranking
+    print(f"    → {len(best)}件")
+    return best
 
 
 def fetch_ring_seasons(gc, sheet_id):
@@ -363,14 +359,14 @@ header {{
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-  background: #fff;
-  border-radius: 6px;
-  padding: 6px 10px;
 }}
 .logo-img {{
   height: 60px;
   width: auto;
   object-fit: contain;
+  filter:
+    drop-shadow(0 0 1px rgba(255,255,255,0.9))
+    drop-shadow(0 0 3px rgba(255,255,255,0.5));
 }}
 .logo-fallback {{
   font-family: 'Cinzel', serif;
