@@ -307,10 +307,29 @@ def _season_tabs_html(seasons, color_key, no_data_msg):
     return tabs + panels
 
 
+def _build_search_js(ring_seasons, daily_seasons, toname_seasons):
+    entries = []
+    cats = [
+        ("ring",   "リング",   ring_seasons),
+        ("daily",  "デイリー", daily_seasons),
+        ("toname", "トナメ",   toname_seasons),
+    ]
+    for cat_key, cat_label, seasons in cats:
+        for s in seasons:
+            for r in s["ranking"]:
+                entries.append({
+                    "cat": cat_key, "catLabel": cat_label,
+                    "season": s["title"],
+                    "rank": r["rank"], "name": r["name"], "points": r["points"],
+                })
+    return json.dumps(entries, ensure_ascii=False)
+
+
 def generate_html(ring_seasons, daily_seasons, toname_seasons, updated_at):
-    ring_html   = _season_tabs_html(ring_seasons,   "ring",   "シーズンデータなし")
-    daily_html  = _season_tabs_html(daily_seasons,  "daily",  "デイリーデータなし")
-    toname_html = _season_tabs_html(toname_seasons, "toname", "シーズンデータなし")
+    ring_html     = _season_tabs_html(ring_seasons,   "ring",   "シーズンデータなし")
+    daily_html    = _season_tabs_html(daily_seasons,  "daily",  "デイリーデータなし")
+    toname_html   = _season_tabs_html(toname_seasons, "toname", "シーズンデータなし")
+    search_data_js = _build_search_js(ring_seasons, daily_seasons, toname_seasons)
 
     return f"""<!DOCTYPE html>
 <html lang="ja">
@@ -668,6 +687,66 @@ header {{
 
 .no-data {{ color: var(--muted); font-size: 0.88rem; padding: 24px 0; text-align: center; }}
 
+/* ── Search ── */
+.search-btn {{
+  background: none; border: none; cursor: pointer;
+  color: rgba(255,255,255,0.65); padding: 8px;
+  display: flex; align-items: center; flex-shrink: 0;
+  transition: color 0.2s;
+}}
+.search-btn:hover {{ color: var(--gold-lt); }}
+.search-btn svg {{ width: 24px; height: 24px; }}
+.search-overlay {{
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55); z-index: 1000;
+  align-items: flex-start; justify-content: center;
+  padding: 72px 16px 24px;
+}}
+.search-overlay.open {{ display: flex; }}
+.search-modal {{
+  background: #fff; border-radius: 16px;
+  width: min(100%, 600px); max-height: 72vh;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+}}
+.search-input-wrap {{
+  display: flex; align-items: center;
+  padding: 12px 16px; gap: 10px;
+  border-bottom: 1px solid var(--border);
+}}
+.search-input {{
+  flex: 1; border: none; outline: none;
+  font-size: 1rem; font-family: 'Noto Sans JP', sans-serif;
+  color: var(--text); background: transparent;
+}}
+.search-input::placeholder {{ color: #bbb; }}
+.search-close {{
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 1.1rem; padding: 4px 6px;
+  line-height: 1;
+}}
+.search-results {{ overflow-y: auto; }}
+.search-empty {{ text-align: center; color: var(--muted); padding: 32px; font-size: 0.88rem; }}
+.search-hint  {{ text-align: center; color: #ccc; padding: 28px; font-size: 0.82rem; }}
+.search-result-item {{
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid #f5f0eb;
+  transition: background 0.12s;
+}}
+.search-result-item:last-child {{ border-bottom: none; }}
+.search-result-item:hover {{ background: #faf7f4; }}
+.s-cat {{
+  flex-shrink: 0; font-size: 0.62rem; font-weight: 700;
+  padding: 3px 7px; border-radius: 20px; color: #fff; white-space: nowrap;
+}}
+.s-cat.ring   {{ background: var(--ring-c); }}
+.s-cat.daily  {{ background: var(--daily-c); }}
+.s-cat.toname {{ background: var(--toname-c); }}
+.s-season {{ font-size: 0.7rem; color: var(--muted); white-space: nowrap; min-width: 48px; flex-shrink: 0; }}
+.s-rank   {{ font-size: 0.72rem; font-weight: 700; color: var(--muted); min-width: 28px; flex-shrink: 0; }}
+.s-name   {{ flex: 1; font-weight: 700; font-size: 0.92rem; }}
+.s-pts    {{ font-weight: 700; color: var(--gold); font-size: 0.82rem; white-space: nowrap; }}
+
 @media (max-width: 480px) {{
   header {{ min-height: 64px; gap: 10px; padding: 0 12px; }}
   .logo-fallback {{ font-size: 0.9rem; }}
@@ -686,8 +765,28 @@ header {{
     <div class="header-title">R A N K I N G</div>
     <div class="header-sub">最終更新: {updated_at}</div>
   </div>
-  <div class="header-updated"></div>
+  <button class="search-btn" onclick="openSearch()" aria-label="検索">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
+    </svg>
+  </button>
 </header>
+
+<!-- ── Search overlay ── -->
+<div id="searchOverlay" class="search-overlay">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
+      </svg>
+      <input id="searchInput" class="search-input" type="text" placeholder="名前で検索..." oninput="doSearch(this.value)" autocomplete="off">
+      <button class="search-close" onclick="closeSearch()">✕</button>
+    </div>
+    <div id="searchResults" class="search-results">
+      <div class="search-hint">名前を入力して検索</div>
+    </div>
+  </div>
+</div>
 
 <!-- ── Category nav ── -->
 <nav class="cat-nav">
@@ -724,6 +823,8 @@ header {{
 </div>
 
 <script>
+const SEARCH_DATA = {search_data_js};
+
 function switchCat(btn, id) {{
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.category-panel').forEach(p => p.classList.remove('active'));
@@ -739,6 +840,38 @@ function switchSeason(btn, id) {{
   var el = document.getElementById(id);
   if (el) el.classList.add('active');
 }}
+
+function openSearch() {{
+  document.getElementById('searchOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('searchInput').focus(), 50);
+}}
+function closeSearch() {{
+  document.getElementById('searchOverlay').classList.remove('open');
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchResults').innerHTML = '<div class="search-hint">名前を入力して検索</div>';
+}}
+function doSearch(q) {{
+  q = q.trim().toLowerCase();
+  var el = document.getElementById('searchResults');
+  if (!q) {{ el.innerHTML = '<div class="search-hint">名前を入力して検索</div>'; return; }}
+  var matches = SEARCH_DATA.filter(d => d.name.toLowerCase().includes(q));
+  if (!matches.length) {{ el.innerHTML = '<div class="search-empty">見つかりませんでした</div>'; return; }}
+  el.innerHTML = matches.map(d =>
+    '<div class="search-result-item">' +
+    '<span class="s-cat ' + d.cat + '">' + d.catLabel + '</span>' +
+    '<span class="s-season">' + d.season + '</span>' +
+    '<span class="s-rank">' + d.rank + '</span>' +
+    '<span class="s-name">' + d.name + '</span>' +
+    '<span class="s-pts">' + d.points + '</span>' +
+    '</div>'
+  ).join('');
+}}
+document.getElementById('searchOverlay').addEventListener('click', function(e) {{
+  if (e.target === this) closeSearch();
+}});
+document.addEventListener('keydown', function(e) {{
+  if (e.key === 'Escape') closeSearch();
+}});
 </script>
 </body>
 </html>"""
