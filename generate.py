@@ -443,15 +443,42 @@ header {{
 .category-panel {{ display: none; }}
 .category-panel.active {{ display: block; }}
 
-/* ── Hero banner (image) ── */
-.hero-img {{
-  display: block;
-  width: 100%;
-  height: auto;
-  max-height: 320px;
-  object-fit: cover;
-  object-position: center top;
+/* ── Hero banner ── */
+.hero {{
+  padding: 36px 24px 28px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
 }}
+.ring-hero   {{ background: linear-gradient(135deg, #2c0000 0%, #7b1010 50%, #2c0000 100%); }}
+.daily-hero  {{ background: linear-gradient(135deg, #001a0a 0%, #145a32 50%, #001a0a 100%); }}
+.toname-hero {{ background: linear-gradient(135deg, #000d1a 0%, #1a3a5c 50%, #000d1a 100%); }}
+.hero::before {{
+  content: '♠ ♥ ♦ ♣';
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 6rem; letter-spacing: 1em;
+  color: rgba(255,255,255,0.04);
+  pointer-events: none;
+}}
+.hero-label {{
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.55em;
+  color: rgba(212,175,55,0.8);
+  margin-bottom: 10px;
+}}
+.hero-title {{
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: clamp(1.5rem, 5.5vw, 2.6rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+  line-height: 1.2;
+}}
+.ring-hero .hero-title   {{ color: #ffe0e0; }}
+.daily-hero .hero-title  {{ color: #d0fde0; }}
+.toname-hero .hero-title {{ color: #d0e8ff; }}
 
 /* ── Content area ── */
 .content-wrap {{
@@ -630,26 +657,29 @@ header {{
 
 <!-- ── Ring panel ── -->
 <div class="category-panel ring-panel active" id="ring-panel">
-  <img src="hero_ring.png" class="hero-img" alt="リングゲームポイントランキング">
-  <div class="content-wrap">
-    {ring_html}
+  <div class="hero ring-hero">
+    <div class="hero-label">SEASON RANKING</div>
+    <div class="hero-title">リングゲームポイントランキング</div>
   </div>
+  <div class="content-wrap">{ring_html}</div>
 </div>
 
 <!-- ── Daily panel ── -->
 <div class="category-panel daily-panel" id="daily-panel">
-  <img src="hero_daily.png" class="hero-img" alt="デイリーリングポイントランキング">
-  <div class="content-wrap">
-    {daily_html}
+  <div class="hero daily-hero">
+    <div class="hero-label">DAILY RANKING</div>
+    <div class="hero-title">デイリーリングポイントランキング</div>
   </div>
+  <div class="content-wrap">{daily_html}</div>
 </div>
 
 <!-- ── Tournament panel ── -->
 <div class="category-panel toname-panel" id="toname-panel">
-  <img src="hero_toname.png" class="hero-img" alt="トナメポイントランキング">
-  <div class="content-wrap">
-    {toname_html}
+  <div class="hero toname-hero">
+    <div class="hero-label">MONTHLY TOURNAMENT</div>
+    <div class="hero-title">トナメポイントランキング</div>
   </div>
+  <div class="content-wrap">{toname_html}</div>
 </div>
 
 <script>
