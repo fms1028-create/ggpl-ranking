@@ -247,26 +247,23 @@ def _podium_html(ranking, color_key):
     if not ranking:
         return '<p class="no-data">データなし</p>'
 
-    suits = ["♠", "♥", "♦"]
     top3 = (ranking + [None, None, None])[:3]
     first, second, third = top3[0], top3[1], top3[2]
 
-    def place_html(player, place, suit, block_cls, block_num, crown=False):
+    def place_html(player, place, block_cls, block_num):
         h = f'<div class="podium-place {place}">'
         if player:
-            if crown:
-                h += '<div class="crown-icon">♛</div>'
-            h += f'<div class="suit-icon {color_key}-suit">{suit}</div>'
+            h += f'<div class="pod-rank-badge badge-{place}">{block_num}</div>'
             h += f'<div class="pod-name">{player["name"]}</div>'
             h += f'<div class="pod-pts {color_key}-pts">{player["points"]}</div>'
-        h += f'<div class="pod-block {block_cls}"><span>{block_num}</span></div>'
+        h += f'<div class="pod-block {block_cls}"></div>'
         h += '</div>'
         return h
 
     html = '<div class="podium-wrap">'
-    html += place_html(second, "second", suits[1], "block-silver", "2")
-    html += place_html(first,  "first",  suits[0], "block-gold",   "1", crown=True)
-    html += place_html(third,  "third",  suits[2], "block-bronze",  "3")
+    html += place_html(second, "second", "block-silver", "2")
+    html += place_html(first,  "first",  "block-gold",   "1")
+    html += place_html(third,  "third",  "block-bronze",  "3")
     html += '</div>'
 
     rest = ranking[3:]
@@ -485,37 +482,41 @@ header {{
   padding: 24px 16px 48px;
 }}
 
-/* ── Season tabs (horizontal scroll) ── */
+/* ── Season tabs ── */
 .season-tabs {{
   display: flex;
   flex-wrap: nowrap;
   overflow-x: auto;
-  gap: 8px;
-  margin-bottom: 20px;
-  padding-bottom: 6px;
+  gap: 3px;
+  margin-bottom: 24px;
+  padding: 4px;
+  background: rgba(0,0,0,0.06);
+  border-radius: 12px;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-width: none;
 }}
-.season-tabs::-webkit-scrollbar {{ height: 4px; }}
-.season-tabs::-webkit-scrollbar-track {{ background: transparent; }}
-.season-tabs::-webkit-scrollbar-thumb {{ background: var(--border); border-radius: 2px; }}
+.season-tabs::-webkit-scrollbar {{ display: none; }}
 .season-btn {{
   flex-shrink: 0;
-  padding: 6px 16px;
-  border-radius: 20px;
-  border: 1.5px solid var(--border);
+  padding: 8px 18px;
+  border-radius: 9px;
+  border: none;
   font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
-  background: #fff;
-  color: var(--muted);
+  background: transparent;
+  color: #888;
   transition: all 0.2s;
   white-space: nowrap;
+  letter-spacing: 0.02em;
 }}
-.ring-tab-btn.active   {{ border-color: var(--ring-c);   color: var(--ring-c);   background: #fff5f5; }}
-.daily-tab-btn.active  {{ border-color: var(--daily-c);  color: var(--daily-c);  background: #f0fff5; }}
-.toname-tab-btn.active {{ border-color: var(--toname-c); color: var(--toname-c); background: #f0f5ff; }}
+.season-btn.active {{
+  background: #fff;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.12);
+}}
+.ring-tab-btn.active   {{ color: var(--ring-c); }}
+.daily-tab-btn.active  {{ color: var(--daily-c); }}
+.toname-tab-btn.active {{ color: var(--toname-c); }}
 
 .season-panel {{ display: none; }}
 .season-panel.active {{ display: block; }}
@@ -539,21 +540,20 @@ header {{
 .podium-place.second {{ order: 1; }}
 .podium-place.third  {{ order: 3; }}
 
-.crown-icon {{
-  font-size: 1.2rem;
-  color: #c9a227;
-  margin-bottom: 2px;
-  font-family: serif;
+.pod-rank-badge {{
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Cinzel', serif;
+  font-size: 1rem; font-weight: 900;
+  color: #fff;
+  margin-bottom: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  letter-spacing: 0;
 }}
-.suit-icon {{
-  font-size: 1.6rem;
-  font-family: serif;
-  line-height: 1;
-  margin-bottom: 4px;
-}}
-.ring-suit   {{ color: var(--ring-c); }}
-.daily-suit  {{ color: var(--daily-c); }}
-.toname-suit {{ color: var(--toname-c); }}
+.badge-first  {{ background: linear-gradient(145deg, #f0d060 0%, #b8830a 100%); box-shadow: 0 2px 12px rgba(212,175,55,0.5); }}
+.badge-second {{ background: linear-gradient(145deg, #d0d0d0 0%, #7a7a7a 100%); }}
+.badge-third  {{ background: linear-gradient(145deg, #e09050 0%, #8b4800 100%); }}
 
 .pod-name {{
   font-size: 0.82rem;
@@ -575,16 +575,7 @@ header {{
 
 .pod-block {{
   width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border-radius: 4px 4px 0 0;
-}}
-.pod-block span {{
-  font-family: 'Cinzel', serif;
-  font-weight: 900;
-  font-size: 1.4rem;
-  color: #fff;
 }}
 .block-gold   {{ height: 80px; background: linear-gradient(180deg, #d4af37 0%, #8b6a00 100%); }}
 .block-silver {{ height: 58px; background: linear-gradient(180deg, #a8a8a8 0%, #5a5a5a 100%); }}
