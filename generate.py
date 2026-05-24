@@ -342,7 +342,7 @@ header {{
   flex-shrink: 0;
 }}
 .logo-img {{
-  height: 52px;
+  height: 60px;
   width: auto;
   object-fit: contain;
 }}
@@ -613,11 +613,7 @@ header {{
 <!-- ── Header ── -->
 <header>
   <div class="header-logo">
-    <!-- ロゴ画像を追加する場合: <img src="logo.png" class="logo-img" alt="GGP LIVE SHINJUKU"> -->
-    <div class="logo-fallback">
-      GGP LIVE<br>SHINJUKU
-      <small>G R A N D &nbsp; P O K E R &nbsp; L O U N G E</small>
-    </div>
+    <img src="logo.png" class="logo-img" alt="GGP LIVE SHINJUKU">
   </div>
   <div class="header-center">
     <div class="header-title">R A N K I N G</div>
