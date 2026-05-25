@@ -8,8 +8,9 @@ import sys
 import json
 import re
 import base64
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 
+import jpholiday
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -140,6 +141,41 @@ def fetch_ring_seasons(gc, sheet_id):
     return seasons
 
 
+def fetch_non_game_dates(gc, sheet_id) -> set:
+    """デイリー運用タブのK列から非開催日を取得し、金・土・祝前日も追加する。"""
+    non_game = set()
+    try:
+        sh = gc.open_by_key(sheet_id)
+        ws = sh.worksheet("デイリー運用")
+        col_k = ws.col_values(11)  # K列
+        for cell in col_k:
+            cell = cell.strip()
+            if re.match(r"\d{4}/\d{2}/\d{2}", cell):
+                non_game.add(cell)
+        print(f"  非開催日リスト: {len(non_game)}件読み込み")
+    except Exception as e:
+        print(f"  非開催日リスト読み込みスキップ: {e}")
+    return non_game
+
+
+def is_non_game_day(date_str: str, non_game_dates: set) -> bool:
+    """金・土・祝前日・スプシ記載日は非開催。"""
+    if date_str in non_game_dates:
+        return True
+    try:
+        d = date(int(date_str[:4]), int(date_str[5:7]), int(date_str[8:10]))
+    except ValueError:
+        return False
+    # 金曜(4)・土曜(5)
+    if d.weekday() in (4, 5):
+        return True
+    # 祝前日（翌日が祝日）
+    next_day = d + timedelta(days=1)
+    if jpholiday.is_holiday(next_day):
+        return True
+    return False
+
+
 # ── Daily ring ranking: aggregate col C=name, col I=net points, col J=date
 #    from all season tabs (デイリー運用 is just an ops manual, not data)
 
@@ -149,6 +185,8 @@ def fetch_daily_ranking(gc, sheet_id):
     except Exception as e:
         print(f"  デイリー読み込みエラー: {e}")
         return []
+
+    non_game_dates = fetch_non_game_dates(gc, sheet_id)
 
     by_date = {}
     for ws in sh.worksheets():
@@ -164,6 +202,8 @@ def fetch_daily_ranking(gc, sheet_id):
             date_str = str(row[9]).strip()
 
             if not name or not date_str or not re.match(r"\d{4}/\d{2}/\d{2}", date_str):
+                continue
+            if is_non_game_day(date_str, non_game_dates):
                 continue
             minus = raw.startswith("-") or raw.startswith("−")
             points_str = re.sub(r"[^\d.]", "", raw)
