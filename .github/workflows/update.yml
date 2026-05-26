@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '0 4 * * *'  # 毎日 13:00 JST
-    - cron: '0 11 * * *' # 毎日 20:00 JST
+    - cron: "0 4 * * *"  # 毎日 13:00 JST
+    - cron: "0 12 * * *" # 毎日 21:00 JST
   workflow_dispatch:
 
 jobs:
@@ -21,8 +21,8 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
 
       - name: 依存パッケージをインストール
         run: pip install -r requirements.txt
@@ -37,7 +37,7 @@ jobs:
       - name: GitHub Pagesにデプロイ
         uses: peaceiris/actions-gh-pages@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GH_PAT }}
           publish_dir: .
           publish_branch: gh-pages
-          exclude_assets: '.github,generate.py,requirements.txt'
+          exclude_assets: ".github,generate.py,requirements.txt"
