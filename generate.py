@@ -203,6 +203,9 @@ def fetch_daily_ranking(gc, sheet_id):
 
             if not name or not date_str or not re.match(r"\d{4}/\d{2}/\d{2}", date_str):
                 continue
+            # デイリーランキングは2026年6月以降のみ表示
+            if date_str < "2026/06/01":
+                continue
             if is_non_game_day(date_str, non_game_dates):
                 continue
             minus = raw.startswith("-") or raw.startswith("−")
